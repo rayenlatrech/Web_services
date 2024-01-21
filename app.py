@@ -1,9 +1,9 @@
-from flask import Flask, jsonify, request
+
 import requests
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -11,6 +11,34 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 
 jwt_manager = JWTManager(app)
 
+@app.route('/register', methods=['POST'])
+def register_user():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'message': 'Username and password are required!'}), 400
+
+        conn = sqlite3.connect('user_data.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username=?", (username,))
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            return jsonify({'message': 'Username already exists!'}), 400
+
+        hashed_password = generate_password_hash(password)
+        cursor.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'User registered successfully!'})
+    except sqlite3.Error as e:
+        return jsonify({'message': f'Error: {e}'})
+    
 
 def authenticate(username, password):
     try:
@@ -141,20 +169,15 @@ def update_portfolio():
 @app.route('/portfolio_value/<username>', methods=['GET'])
 @jwt_required()
 def get_portfolio_value(username):
-
     try:
         conn = sqlite3.connect('user_data.db')
         cursor = conn.cursor()
-
         cursor.execute(
             "SELECT portfolio FROM users WHERE username=?", (username,))
         user_portfolio = cursor.fetchone()
-
         conn.close()
-
         if user_portfolio:
             user_portfolio = user_portfolio[0]
-
             if user_portfolio:
                 print(f"User Portfolio: {user_portfolio}")  
 
